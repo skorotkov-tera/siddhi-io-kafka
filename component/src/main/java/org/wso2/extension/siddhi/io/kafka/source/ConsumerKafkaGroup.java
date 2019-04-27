@@ -42,12 +42,13 @@ public class ConsumerKafkaGroup {
     private ScheduledExecutorService executorService;
     private String threadingOption;
     private boolean isBinaryMessage;
+    private Double rateLimit;
     private Map<String, Map<SequenceKey, Integer>> perConsumerLastReceivedSeqNo = new HashMap<>();
 
     ConsumerKafkaGroup(String topics[], String partitions[], Properties props, Map<String, Map<Integer, Long>>
             topicOffsetMap, Map<String, Map<SequenceKey, Integer>> perConsumerLastReceivedSeqNo, String threadingOption,
                        ScheduledExecutorService executorService, boolean isBinaryMessage,
-                       SourceEventListener sourceEventListener) {
+                       SourceEventListener sourceEventListener, Double rateLimit) {
         this.threadingOption = threadingOption;
         this.topicOffsetMap = topicOffsetMap;
         this.perConsumerLastReceivedSeqNo = perConsumerLastReceivedSeqNo;
@@ -56,11 +57,12 @@ public class ConsumerKafkaGroup {
         this.props = props;
         this.executorService = executorService;
         this.isBinaryMessage = isBinaryMessage;
+        this.rateLimit = rateLimit;
 
         if (KafkaSource.SINGLE_THREADED.equals(threadingOption)) {
             KafkaConsumerThread kafkaConsumerThread =
                     new KafkaConsumerThread(sourceEventListener, topics, partitions, props, topicOffsetMap,
-                            false, isBinaryMessage);
+                            false, isBinaryMessage, rateLimit);
             kafkaConsumerThreadList.add(kafkaConsumerThread);
             LOG.info("Kafka Consumer thread starting to listen on topic(s): " + Arrays.toString(topics) +
                     " with partition/s: " + Arrays.toString(partitions));
@@ -68,7 +70,7 @@ public class ConsumerKafkaGroup {
             for (String topic : topics) {
                 KafkaConsumerThread kafkaConsumerThread =
                         new KafkaConsumerThread(sourceEventListener, new String[]{topic}, partitions, props,
-                                topicOffsetMap, false, isBinaryMessage);
+                                topicOffsetMap, false, isBinaryMessage, rateLimit);
                 kafkaConsumerThreadList.add(kafkaConsumerThread);
                 LOG.info("Kafka Consumer thread starting to listen on topic: " + topic +
                         " with partition/s: " + Arrays.toString(partitions));
@@ -79,7 +81,7 @@ public class ConsumerKafkaGroup {
                     KafkaConsumerThread kafkaConsumerThread =
                             new KafkaConsumerThread(sourceEventListener, new String[]{topic},
                                     new String[]{partition}, props, topicOffsetMap, true,
-                                    isBinaryMessage);
+                                    isBinaryMessage, rateLimit);
                     kafkaConsumerThreadList.add(kafkaConsumerThread);
                     LOG.info("Kafka Consumer thread starting to listen on topic: " + topic +
                             " with partition: " + partition);

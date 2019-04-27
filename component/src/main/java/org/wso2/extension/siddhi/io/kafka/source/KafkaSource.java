@@ -112,6 +112,11 @@ import java.util.concurrent.ScheduledExecutorService;
                         type = {DataType.STRING},
                         optional = true,
                         defaultValue = "null"),
+                @Parameter(name = "rate.limit",
+                        description = "If present limits rate of reading (in messages per second).",
+                        type = {DataType.DOUBLE},
+                        optional = true,
+                        defaultValue = "null"),
                 @Parameter(name = "optional.configuration",
                            description = "This parameter contains all the other possible configurations that the " +
                                    "consumer is created with. \n" +
@@ -175,6 +180,7 @@ public class KafkaSource extends Source implements SourceSyncCallback {
     public static final String ENTRY_SEPARATOR = ":";
     public static final String LAST_RECEIVED_SEQ_NO_KEY = "lastReceivedSeqNo";
     public static final String IS_BINARY_MESSAGE = "is.binary.message";
+    public static final String RATE_LIMIT = "rate.limit";
     private static final Logger LOG = Logger.getLogger(KafkaSource.class);
     private SourceEventListener sourceEventListener;
     private ScheduledExecutorService executorService;
@@ -188,6 +194,7 @@ public class KafkaSource extends Source implements SourceSyncCallback {
     private String topics[];
     private String optionalConfigs;
     private boolean seqEnabled = false;
+    private Double rateLimit;
     private Map<String, Map<SequenceKey, Integer>> consumerLastReceivedSeqNoMap = null;
     private boolean isBinaryMessage;
     private String topicOffsetMapConfig;
@@ -213,6 +220,8 @@ public class KafkaSource extends Source implements SourceSyncCallback {
         String topicList = optionHolder.validateAndGetStaticValue(ADAPTOR_SUBSCRIBER_TOPIC);
         topics = topicList.split(HEADER_SEPARATOR);
         seqEnabled = optionHolder.validateAndGetStaticValue(SEQ_ENABLED, "false").equalsIgnoreCase("true");
+        String rateLimitString = optionHolder.validateAndGetStaticValue(RATE_LIMIT, "null");
+        rateLimit = rateLimitString.equalsIgnoreCase("null") ? null : Double.valueOf(rateLimitString);
         optionalConfigs = optionHolder.validateAndGetStaticValue(ADAPTOR_OPTIONAL_CONFIGURATION_PROPERTIES, null);
         isBinaryMessage = Boolean.parseBoolean(optionHolder.validateAndGetStaticValue(IS_BINARY_MESSAGE,
                 "false"));
@@ -230,7 +239,7 @@ public class KafkaSource extends Source implements SourceSyncCallback {
         consumerKafkaGroup = new ConsumerKafkaGroup(topics, partitions,
                 KafkaSource.createConsumerConfig(bootstrapServers, groupID, optionalConfigs, isBinaryMessage),
                 topicOffsetMap, consumerLastReceivedSeqNoMap, threadingOption, executorService, isBinaryMessage,
-                sourceEventListener);
+                sourceEventListener, rateLimit);
     }
 
     @Override

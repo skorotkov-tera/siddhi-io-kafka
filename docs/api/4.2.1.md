@@ -210,7 +210,7 @@ from FooStream select symbol, price, volume insert into BarStream;
 
 <span id="syntax" class="md-typeset" style="display: block; font-weight: bold;">Syntax</span>
 ```
-@source(type="kafka", bootstrap.servers="<STRING>", topic.list="<STRING>", group.id="<STRING>", threading.option="<STRING>", partition.no.list="<STRING>", seq.enabled="<BOOL>", is.binary.message="<BOOL>", topic.offset.map="<STRING>", optional.configuration="<STRING>", @map(...)))
+@source(type="kafka", bootstrap.servers="<STRING>", topic.list="<STRING>", group.id="<STRING>", threading.option="<STRING>", partition.no.list="<STRING>", seq.enabled="<BOOL>", is.binary.message="<BOOL>", topic.offset.map="<STRING>", rate.limit="<DOUBLE>", optional.configuration="<STRING>", @map(...)))
 ```
 
 <span id="query-parameters" class="md-typeset" style="display: block; color: rgba(0, 0, 0, 0.54); font-size: 12.8px; font-weight: bold;">QUERY PARAMETERS</span>
@@ -284,6 +284,14 @@ from FooStream select symbol, price, volume insert into BarStream;
         <td style="vertical-align: top; word-wrap: break-word">This parameter specifies reading offsets for each topic and partition. The value for this parameter is specified in the following format: <br>&nbsp;<code>&lt;topic&gt;=&lt;offset&gt;,&lt;topic&gt;=&lt;offset&gt;,</code><br>&nbsp;&nbsp;When an offset is defined for a topic, the Kafka source skips reading the message with the number specified as the offset as well as all the messages sent previous to that message. If the offset is not defined for a specific topic it reads messages from the beginning. <br>e.g., <code>stocks=100,trades=50</code> reads from the 101th message of the <code>stocks</code> topic, and from the 51st message of the <code>trades</code> topic.</td>
         <td style="vertical-align: top">null</td>
         <td style="vertical-align: top">STRING</td>
+        <td style="vertical-align: top">Yes</td>
+        <td style="vertical-align: top">No</td>
+    </tr>
+    <tr>
+        <td style="vertical-align: top">rate.limit</td>
+        <td style="vertical-align: top; word-wrap: break-word">If present limits rate of reading (in messages per second).</td>
+        <td style="vertical-align: top">null</td>
+        <td style="vertical-align: top">DOUBLE</td>
         <td style="vertical-align: top">Yes</td>
         <td style="vertical-align: top">No</td>
     </tr>

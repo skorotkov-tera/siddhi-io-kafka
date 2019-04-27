@@ -18,6 +18,7 @@
 
 package org.wso2.extension.siddhi.io.kafka.source;
 
+import com.google.common.util.concurrent.RateLimiter;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -61,10 +62,11 @@ public class KafkaConsumerThread implements Runnable {
     private boolean isBinaryMessage = false;
     private ReentrantLock lock;
     private Condition condition;
+    private Double rateLimit;
 
     KafkaConsumerThread(SourceEventListener sourceEventListener, String topics[], String partitions[],
                         Properties props, Map<String, Map<Integer, Long>> topicOffsetMap,
-                        boolean isPartitionWiseThreading, boolean isBinaryMessage) {
+                        boolean isPartitionWiseThreading, boolean isBinaryMessage, Double rateLimit) {
         this.consumer = new KafkaConsumer<>(props);
         this.sourceEventListener = sourceEventListener;
         this.topicOffsetMap = topicOffsetMap;
@@ -73,6 +75,7 @@ public class KafkaConsumerThread implements Runnable {
         this.isPartitionWiseThreading = isPartitionWiseThreading;
         this.isBinaryMessage = isBinaryMessage;
         this.consumerThreadId = buildId();
+        this.rateLimit = rateLimit;
         lock = new ReentrantLock();
         condition = lock.newCondition();
         if (null != partitions) {
@@ -141,6 +144,15 @@ public class KafkaConsumerThread implements Runnable {
     @Override
     public void run() {
         final Lock consumerLock = this.consumerLock;
+        RateLimiter rateLimiter = null;
+        try {
+            if (rateLimit != null) {
+              rateLimiter = RateLimiter.create(rateLimit);
+            }
+        } catch (Throwable ex) {
+            LOG.error("RateLimiter can not be created: " + ex.getMessage(), ex);
+        }
+
         while (!inactive) {
                 if (paused) {
                     lock.lock();
@@ -168,6 +180,9 @@ public class KafkaConsumerThread implements Runnable {
                 }
                 if (null != records) {
                     for (ConsumerRecord record : records) {
+                        if (rateLimiter != null) {
+                            rateLimiter.acquire();
+                        }
                         int partition = record.partition();
                         Object event = record.value();
                         Object eventBody = null;
