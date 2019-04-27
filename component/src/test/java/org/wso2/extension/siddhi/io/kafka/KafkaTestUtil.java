@@ -20,7 +20,6 @@ package org.wso2.extension.siddhi.io.kafka;
 
 import kafka.admin.AdminUtils;
 import kafka.admin.RackAwareMode;
-import kafka.common.TopicExistsException;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServerStartable;
 import kafka.utils.ZKStringSerializer$;
@@ -32,6 +31,7 @@ import org.apache.curator.test.TestingServer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.log4j.Logger;
 
 import java.io.File;

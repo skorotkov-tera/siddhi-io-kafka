@@ -210,7 +210,7 @@ from FooStream select symbol, price, volume insert into BarStream;
 
 <span id="syntax" class="md-typeset" style="display: block; font-weight: bold;">Syntax</span>
 ```
-@source(type="kafka", bootstrap.servers="<STRING>", topic.list="<STRING>", group.id="<STRING>", threading.option="<STRING>", partition.no.list="<STRING>", seq.enabled="<BOOL>", is.binary.message="<BOOL>", topic.offset.map="<STRING>", rate.limit="<DOUBLE>", optional.configuration="<STRING>", @map(...)))
+@source(type="kafka", bootstrap.servers="<STRING>", topic.list="<STRING>", group.id="<STRING>", threading.option="<STRING>", partition.no.list="<STRING>", seq.enabled="<BOOL>", is.binary.message="<BOOL>", topic.offset.map="<STRING>", rate.limit="<DOUBLE>", topic.to.datetime.map="<STRING>", optional.configuration="<STRING>", @map(...)))
 ```
 
 <span id="query-parameters" class="md-typeset" style="display: block; color: rgba(0, 0, 0, 0.54); font-size: 12.8px; font-weight: bold;">QUERY PARAMETERS</span>
@@ -292,6 +292,14 @@ from FooStream select symbol, price, volume insert into BarStream;
         <td style="vertical-align: top; word-wrap: break-word">If present limits rate of reading (in messages per second).</td>
         <td style="vertical-align: top">null</td>
         <td style="vertical-align: top">DOUBLE</td>
+        <td style="vertical-align: top">Yes</td>
+        <td style="vertical-align: top">No</td>
+    </tr>
+    <tr>
+        <td style="vertical-align: top">topic.to.datetime.map</td>
+        <td style="vertical-align: top; word-wrap: break-word">This parameter specifies time for reading offsets for each topic. The value for this parameter is specified in the following format: <br>&nbsp;<code>&lt;topic&gt;=&lt;date-time&gt;,&lt;topic&gt;=&lt;date-time&gt;,</code><br>&nbsp;&nbsp;When time is defined for a topic, the Kafka source skips reading the messages which timestamps are older than specified time. If the time is not defined for a specific topic it reads messages from the beginning. <br>Time format is <code>yyyy-MM-dd'T'HH:mm:ss.SSSz</code>.</td>
+        <td style="vertical-align: top">null</td>
+        <td style="vertical-align: top">STRING</td>
         <td style="vertical-align: top">Yes</td>
         <td style="vertical-align: top">No</td>
     </tr>

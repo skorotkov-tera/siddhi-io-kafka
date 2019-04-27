@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.log4j.Logger;
 import org.wso2.extension.siddhi.io.kafka.sink.KafkaSink;
@@ -52,7 +54,7 @@ public class KafkaConsumerThread implements Runnable {
     private final String partitions[];
     private SourceEventListener sourceEventListener;
     private String topics[];
-    private Map<String, Map<Integer, Long>> topicOffsetMap = new HashMap<>();
+    private Map<String, Map<Integer, Long>> topicOffsetMap;
     private volatile boolean paused;
     private volatile boolean inactive;
     private List<TopicPartition> partitionsList = new ArrayList<>();
@@ -66,10 +68,14 @@ public class KafkaConsumerThread implements Runnable {
 
     KafkaConsumerThread(SourceEventListener sourceEventListener, String topics[], String partitions[],
                         Properties props, Map<String, Map<Integer, Long>> topicOffsetMap,
+                        Map<String, Long> topicToDateTimeMap,
                         boolean isPartitionWiseThreading, boolean isBinaryMessage, Double rateLimit) {
         this.consumer = new KafkaConsumer<>(props);
         this.sourceEventListener = sourceEventListener;
         this.topicOffsetMap = topicOffsetMap;
+        if (this.topicOffsetMap == null) {
+            this.topicOffsetMap = new HashMap<>();
+        }
         this.topics = topics;
         this.partitions = partitions;
         this.isPartitionWiseThreading = isPartitionWiseThreading;
@@ -91,13 +97,29 @@ public class KafkaConsumerThread implements Runnable {
                 LOG.info("Adding partitions " + Arrays.toString(partitions) + " for topic: " + topic);
                 consumer.assign(partitionsList);
             }
-        } else {
-            for (String topic : topics) {
-                if (null == topicOffsetMap.get(topic)) {
-                    this.topicOffsetMap.put(topic, new HashMap<>());
-                }
+            if (topicToDateTimeMap != null) {
+                moveToDateTime(topicToDateTimeMap);
+            } else {
+                restore(topicOffsetMap);
             }
-            consumer.subscribe(Arrays.asList(topics));
+        } else {
+            if (topicToDateTimeMap != null) {
+                for (String topic : topics) {
+                    if (null == topicOffsetMap.get(topic)) {
+                        this.topicOffsetMap.put(topic, new HashMap<>());
+                    }
+                    for (PartitionInfo partitionInfo: consumer.partitionsFor(topic)) {
+                        TopicPartition partition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
+                        LOG.info("Adding partition " + partitionInfo.partition() +
+                            " for topic: " + partitionInfo.topic());
+                        partitionsList.add(partition);
+                    }
+                }
+                consumer.assign(partitionsList);
+                moveToDateTime(topicToDateTimeMap);
+            } else {
+                consumer.subscribe(Arrays.asList(topics));
+            }
         }
         LOG.info("Subscribed for topics: " + Arrays.toString(topics));
     }
@@ -137,6 +159,29 @@ public class KafkaConsumerThread implements Runnable {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private void moveToDateTime(Map<String, Long> topicToDateTimeMap) {
+        if (partitionsList.isEmpty()) {
+            return;
+        }
+
+        final Lock consumerLock = this.consumerLock;
+        Map<TopicPartition, Long> partitionsTimes = new HashMap<>();
+        for (TopicPartition partition: partitionsList) {
+            partitionsTimes.put(partition, topicToDateTimeMap.getOrDefault(partition.topic(), 0L));
+        }
+        Map<TopicPartition, OffsetAndTimestamp> offsets = consumer.offsetsForTimes(partitionsTimes);
+        for (Map.Entry<TopicPartition, OffsetAndTimestamp> offsetEntry: offsets.entrySet()) {
+            LOG.info("Seeking partition: " + offsetEntry.getKey().partition() + " for topic: " +
+                offsetEntry.getKey().topic() + " offset: " + (offsetEntry.getValue().offset()));
+            try {
+                consumerLock.lock();
+                consumer.seek(offsetEntry.getKey(), offsetEntry.getValue().offset());
+            } finally {
+                consumerLock.unlock();
             }
         }
     }

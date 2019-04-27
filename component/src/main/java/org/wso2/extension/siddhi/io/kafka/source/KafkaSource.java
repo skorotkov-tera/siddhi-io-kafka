@@ -39,6 +39,9 @@ import org.wso2.siddhi.core.util.transport.OptionHolder;
 import org.wso2.siddhi.query.api.exception.SiddhiAppValidationException;
 
 import java.nio.ByteBuffer;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -117,6 +120,17 @@ import java.util.concurrent.ScheduledExecutorService;
                         type = {DataType.DOUBLE},
                         optional = true,
                         defaultValue = "null"),
+                @Parameter(name = "topic.to.datetime.map",
+                    description = "This parameter specifies time for reading offsets for each topic. " +
+                        "The value for this parameter is specified in the following format: \n " +
+                        "`<topic>=<date-time>,<topic>=<date-time>,`\n " +
+                        " When time is defined for a topic, the Kafka source skips reading the " +
+                        "messages which timestamps are older than specified time. If the time is not defined " +
+                        "for a specific topic it reads messages from the beginning. \n"  +
+                        "Time format is `yyyy-MM-dd'T'HH:mm:ss.SSSz`.",
+                    type = {DataType.STRING},
+                    optional = true,
+                    defaultValue = "null"),
                 @Parameter(name = "optional.configuration",
                            description = "This parameter contains all the other possible configurations that the " +
                                    "consumer is created with. \n" +
@@ -181,12 +195,14 @@ public class KafkaSource extends Source implements SourceSyncCallback {
     public static final String LAST_RECEIVED_SEQ_NO_KEY = "lastReceivedSeqNo";
     public static final String IS_BINARY_MESSAGE = "is.binary.message";
     public static final String RATE_LIMIT = "rate.limit";
+    public static final String TOPIC_TO_DATETIME_MAP = "topic.to.datetime.map";
     private static final Logger LOG = Logger.getLogger(KafkaSource.class);
     private SourceEventListener sourceEventListener;
     private ScheduledExecutorService executorService;
     private OptionHolder optionHolder;
     private ConsumerKafkaGroup consumerKafkaGroup;
     private Map<String, Map<Integer, Long>> topicOffsetMap = new HashMap<>();
+    private Map<String, Long> topicToDateTimeMap = null;
     private String bootstrapServers;
     private String groupID;
     private String threadingOption;
@@ -222,6 +238,9 @@ public class KafkaSource extends Source implements SourceSyncCallback {
         seqEnabled = optionHolder.validateAndGetStaticValue(SEQ_ENABLED, "false").equalsIgnoreCase("true");
         String rateLimitString = optionHolder.validateAndGetStaticValue(RATE_LIMIT, "null");
         rateLimit = rateLimitString.equalsIgnoreCase("null") ? null : Double.valueOf(rateLimitString);
+        String topicToDateTimeMapString = optionHolder.validateAndGetStaticValue(TOPIC_TO_DATETIME_MAP, "null");
+        topicToDateTimeMap = topicToDateTimeMapString.equalsIgnoreCase("null") ?
+            null : readTopicToDateTimeConfig(topicToDateTimeMapString);
         optionalConfigs = optionHolder.validateAndGetStaticValue(ADAPTOR_OPTIONAL_CONFIGURATION_PROPERTIES, null);
         isBinaryMessage = Boolean.parseBoolean(optionHolder.validateAndGetStaticValue(IS_BINARY_MESSAGE,
                 "false"));
@@ -239,7 +258,7 @@ public class KafkaSource extends Source implements SourceSyncCallback {
         consumerKafkaGroup = new ConsumerKafkaGroup(topics, partitions,
                 KafkaSource.createConsumerConfig(bootstrapServers, groupID, optionalConfigs, isBinaryMessage),
                 topicOffsetMap, consumerLastReceivedSeqNoMap, threadingOption, executorService, isBinaryMessage,
-                sourceEventListener, rateLimit);
+                sourceEventListener, rateLimit, topicToDateTimeMap);
     }
 
     @Override
@@ -250,7 +269,7 @@ public class KafkaSource extends Source implements SourceSyncCallback {
     @Override
     public void connect(ConnectionCallback connectionCallback) throws ConnectionUnavailableException {
         // If state does not contain the topic offset map try to read it from the config
-        if (!isRestored && topicOffsetMapConfig != null) {
+        if (!isRestored && topicOffsetMapConfig != null && topicToDateTimeMap == null) {
             topicOffsetMap = readTopicOffsetsConfig(topicOffsetMapConfig);
             if (topicOffsetMap != null) {
                 consumerKafkaGroup.setTopicOffsetMap(topicOffsetMap);
@@ -315,6 +334,33 @@ public class KafkaSource extends Source implements SourceSyncCallback {
             this.consumerLastReceivedSeqNoMap =
                     (Map<String, Map<SequenceKey, Integer>>) state.get(LAST_RECEIVED_SEQ_NO_KEY);
         }
+    }
+
+    private Map<String, Long> readTopicToDateTimeConfig(String topicToDateTimeConfig) {
+        Map<String, Long> topicTimes = new HashMap<>();
+        String[] topicToDateTime = topicToDateTimeConfig.split(",");
+        for (String entry : topicToDateTime) {
+            String[] topicOffset = entry.split("=");
+            if (topicOffset.length != 2) {
+                LOG.error("Topic times should be given in <topic>=<date-time>,.. format. ");
+                return null;
+            }
+
+            boolean isTopicListed = Arrays.stream(topics).anyMatch(topic -> topic.equals(topicOffset[0]));
+            if (!isTopicListed) {
+                LOG.error("Topic " + topicOffset[0] + " not listed in topic.list config");
+                return null;
+            }
+
+            topicTimes.put(topicOffset[0],
+                ZonedDateTime.parse(topicOffset[1], DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ")).
+                    withZoneSameInstant(ZoneOffset.UTC).toEpochSecond() * 1000);
+        }
+        if (topicTimes.isEmpty()) {
+            return null;
+        }
+
+        return topicTimes;
     }
 
     private  Map<String, Map<Integer, Long>> readTopicOffsetsConfig(String topicOffsetsConfig) {
