@@ -173,10 +173,23 @@ public class KafkaConsumerThread implements Runnable {
         for (TopicPartition partition: partitionsList) {
             partitionsTimes.put(partition, topicToDateTimeMap.getOrDefault(partition.topic(), 0L));
         }
+
+        if (partitionsTimes.isEmpty()) {
+            return;
+        }
+
         Map<TopicPartition, OffsetAndTimestamp> offsets = consumer.offsetsForTimes(partitionsTimes);
+
         for (Map.Entry<TopicPartition, OffsetAndTimestamp> offsetEntry: offsets.entrySet()) {
+            if (offsetEntry.getValue() == null) {
+                LOG.info("Not seeking partition: " + offsetEntry.getKey().partition() + " for topic: " +
+                    offsetEntry.getKey().topic());
+                continue;
+            }
+
             LOG.info("Seeking partition: " + offsetEntry.getKey().partition() + " for topic: " +
                 offsetEntry.getKey().topic() + " offset: " + (offsetEntry.getValue().offset()));
+
             try {
                 consumerLock.lock();
                 consumer.seek(offsetEntry.getKey(), offsetEntry.getValue().offset());
