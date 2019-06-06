@@ -103,22 +103,22 @@ public class KafkaConsumerThread implements Runnable {
                 restore(topicOffsetMap);
             }
         } else {
-            if (topicToDateTimeMap != null) {
-                for (String topic : topics) {
-                    if (null == topicOffsetMap.get(topic)) {
-                        this.topicOffsetMap.put(topic, new HashMap<>());
-                    }
-                    for (PartitionInfo partitionInfo: consumer.partitionsFor(topic)) {
-                        TopicPartition partition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
-                        LOG.info("Adding partition " + partitionInfo.partition() +
-                            " for topic: " + partitionInfo.topic());
-                        partitionsList.add(partition);
-                    }
+            for (String topic : topics) {
+                if (null == topicOffsetMap.get(topic)) {
+                    this.topicOffsetMap.put(topic, new HashMap<>());
                 }
-                consumer.assign(partitionsList);
+                for (PartitionInfo partitionInfo: consumer.partitionsFor(topic)) {
+                    TopicPartition partition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
+                    LOG.info("Adding partition " + partitionInfo.partition() +
+                        " for topic: " + partitionInfo.topic());
+                    partitionsList.add(partition);
+                }
+            }
+            consumer.assign(partitionsList);
+            if (topicToDateTimeMap != null) {
                 moveToDateTime(topicToDateTimeMap);
             } else {
-                consumer.subscribe(Arrays.asList(topics));
+                restore(topicOffsetMap);
             }
         }
         LOG.info("Subscribed for topics: " + Arrays.toString(topics));
