@@ -65,11 +65,13 @@ public class KafkaConsumerThread implements Runnable {
     private ReentrantLock lock;
     private Condition condition;
     private Double rateLimit;
+    private boolean isSyncCommitEnabled;
 
     KafkaConsumerThread(SourceEventListener sourceEventListener, String topics[], String partitions[],
                         Properties props, Map<String, Map<Integer, Long>> topicOffsetMap,
                         Map<String, Long> topicToDateTimeMap,
-                        boolean isPartitionWiseThreading, boolean isBinaryMessage, Double rateLimit) {
+                        boolean isPartitionWiseThreading, boolean isBinaryMessage, Double rateLimit,
+                        boolean isSyncCommitEnabled) {
         this.consumer = new KafkaConsumer<>(props);
         this.sourceEventListener = sourceEventListener;
         this.topicOffsetMap = topicOffsetMap;
@@ -82,6 +84,7 @@ public class KafkaConsumerThread implements Runnable {
         this.isBinaryMessage = isBinaryMessage;
         this.consumerThreadId = buildId();
         this.rateLimit = rateLimit;
+        this.isSyncCommitEnabled = isSyncCommitEnabled;
         lock = new ReentrantLock();
         condition = lock.newCondition();
         if (null != partitions) {
@@ -312,7 +315,11 @@ public class KafkaConsumerThread implements Runnable {
                     try {
                         consumerLock.lock();
                         if (!records.isEmpty()) {
-                            consumer.commitAsync();
+                            if (isSyncCommitEnabled) {
+                                consumer.commitSync();
+                            } else {
+                                consumer.commitAsync();
+                            }
                         }
                     } catch (CommitFailedException e) {
                         LOG.error("Kafka commit failed for topic kafka_result_topic", e);

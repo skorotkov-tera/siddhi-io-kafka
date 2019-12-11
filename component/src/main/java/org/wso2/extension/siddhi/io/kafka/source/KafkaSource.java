@@ -131,6 +131,12 @@ import java.util.concurrent.ScheduledExecutorService;
                     type = {DataType.STRING},
                     optional = true,
                     defaultValue = "null"),
+                @Parameter(name = "sync.commit.enabled",
+                    description = "Set this parameter to 'True' to use the sync offset commit, otherwise the async " +
+                        "one is used. Async is used by default.",
+                    type = {DataType.BOOL},
+                    optional = true,
+                    defaultValue = "false"),
                 @Parameter(name = "optional.configuration",
                            description = "This parameter contains all the other possible configurations that the " +
                                    "consumer is created with. \n" +
@@ -196,6 +202,7 @@ public class KafkaSource extends Source implements SourceSyncCallback {
     public static final String IS_BINARY_MESSAGE = "is.binary.message";
     public static final String RATE_LIMIT = "rate.limit";
     public static final String TOPIC_TO_DATETIME_MAP = "topic.to.datetime.map";
+    public static final String SYNC_COMMIT_ENABLED = "sync.commit.enabled";
     private static final Logger LOG = Logger.getLogger(KafkaSource.class);
     private SourceEventListener sourceEventListener;
     private ScheduledExecutorService executorService;
@@ -212,6 +219,7 @@ public class KafkaSource extends Source implements SourceSyncCallback {
     private boolean seqEnabled = false;
     private Double rateLimit;
     private Map<String, Map<SequenceKey, Integer>> consumerLastReceivedSeqNoMap = null;
+    private boolean isSyncCommitEnabled;
     private boolean isBinaryMessage;
     private String topicOffsetMapConfig;
     private boolean isRestored = false;
@@ -241,6 +249,8 @@ public class KafkaSource extends Source implements SourceSyncCallback {
         String topicToDateTimeMapString = optionHolder.validateAndGetStaticValue(TOPIC_TO_DATETIME_MAP, "null");
         topicToDateTimeMap = topicToDateTimeMapString.equalsIgnoreCase("null") ?
             null : readTopicToDateTimeConfig(topicToDateTimeMapString);
+        isSyncCommitEnabled = Boolean.parseBoolean(optionHolder.validateAndGetStaticValue(SYNC_COMMIT_ENABLED,
+                "false"));
         optionalConfigs = optionHolder.validateAndGetStaticValue(ADAPTOR_OPTIONAL_CONFIGURATION_PROPERTIES, null);
         isBinaryMessage = Boolean.parseBoolean(optionHolder.validateAndGetStaticValue(IS_BINARY_MESSAGE,
                 "false"));
@@ -258,7 +268,7 @@ public class KafkaSource extends Source implements SourceSyncCallback {
         consumerKafkaGroup = new ConsumerKafkaGroup(topics, partitions,
                 KafkaSource.createConsumerConfig(bootstrapServers, groupID, optionalConfigs, isBinaryMessage),
                 topicOffsetMap, consumerLastReceivedSeqNoMap, threadingOption, executorService, isBinaryMessage,
-                sourceEventListener, rateLimit, topicToDateTimeMap);
+                sourceEventListener, rateLimit, topicToDateTimeMap, isSyncCommitEnabled);
     }
 
     @Override
